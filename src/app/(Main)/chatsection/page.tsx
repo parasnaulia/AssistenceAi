@@ -1,190 +1,185 @@
 "use client";
+
+import { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import Image from "next/image";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { URL } from "@/app/constants/constants";
 import { addUser } from "@/Store/UserStore";
 import { credFetcher } from "@/utlis/credFetcher";
-import Image from "next/image";
-import React, { useEffect, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
 
 const ChatSection = () => {
-  const [assitence, setAssitences] = useState([]);
-  const credOrg = useSelector((store: any) => {
-    return store.user;
-  });
-  const [selected, setSelected] = useState(null);
   const dispatch = useDispatch();
-
-  const [chat, setChats] = useState("");
-
+  const [assistants, setAssistants] = useState([]);
+  const [selectedAssistant, setSelectedAssistant] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
   const [instructions, setInstructions] = useState("");
 
+  const [loader, setLoader] = useState(false);
+
+  const user = useSelector((store) => store.user);
+
   useEffect(() => {
-    const datafetcher = async () => {
-      if (!credOrg.id) {
-        return;
-      }
+    if (!user.id) return;
+
+    const fetchAssistants = async () => {
       try {
-        const data = await fetch(`${URL}/${credOrg.id}`);
-        const resData = await data.json();
-        if (resData?.success) {
-          setAssitences(resData?.data);
-        }
-      } catch (e) {
-        console.log("There is Some Error In Fetching The User Data " + e);
+        const response = await fetch(`${URL}/${user.id}`);
+        const data = await response.json();
+        if (data?.success) setAssistants(data?.data);
+      } catch (error) {
+        console.error("Error fetching assistants:", error);
       }
     };
-    datafetcher();
-  }, [credOrg]);
-  console.log(assitence);
+
+    fetchAssistants();
+  }, [user]);
 
   useEffect(() => {
-    const datfetch = async () => {
-      const data = await credFetcher();
-
-      dispatch(addUser(data));
+    const fetchUserCredentials = async () => {
+      const userData = await credFetcher();
+      dispatch(addUser(userData));
     };
-    datfetch();
-  }, []);
 
-  const handleClickSelect = (data: any) => {
-    setSelected(data);
+    fetchUserCredentials();
+  }, [dispatch]);
 
-    setInstructions(data?.description);
+  const handleSelectAssistant = (assistant) => {
+    setSelectedAssistant(assistant);
+    setInstructions(assistant?.description || "");
+    setMessages([]);
   };
 
-  const handleChange = (e) => {
-    setInstructions(e.target.value);
-  };
-
-  console.log(instructions);
-
-  const handleSave = async () => {
+  const handleSaveInstructions = async () => {
     try {
-      const data = await fetch(`${URL}/updateins`, {
+      const response = await fetch(`${URL}/updateins`, {
         method: "PATCH",
-        headers: {
-          "content-type": "appication/json",
-        },
-        body: JSON.stringify({ selected, disc: instructions }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selected: selectedAssistant,
+          desc: instructions,
+        }),
       });
-      const resData = await data.json();
-      if (resData?.success) {
-        alert("Nice data saved");
-      } else {
-        alert("Something Went Wrong");
-      }
-    } catch (e) {
-      console.log("There is Some Error in Fetching the data " + e);
+      const data = await response.json();
+      alert(
+        data?.success
+          ? "Instructions saved successfully"
+          : "Failed to save instructions"
+      );
+    } catch (error) {
+      console.error("Error saving instructions:", error);
     }
   };
 
-  const handleChangeChats = (e: any) => {
-    setChats(e.target.value);
-  };
+  const handleSendMessage = async () => {
+    if (!chatInput.trim()) return;
 
-  const handleSendMessage = () => {
-    // alert("ncie");
+    try {
+      setLoader(true);
+      const genAI = new GoogleGenerativeAI(
+        "AIzaSyC3WaJ9Iz5YqegTiqf9UC1fGwUmtpeujIc"
+      );
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const prompt = `${selectedAssistant?.description} ${chatInput}`;
+      const result = await model.generateContent(prompt);
+      const responseText = await result.response.text();
 
-
-    
+      setMessages((prev) => [
+        ...prev,
+        { id: 2, text: chatInput },
+        { id: 1, text: responseText },
+      ]);
+      setChatInput("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+    } finally {
+      setLoader(false);
+    }
   };
 
   return (
-    <div className="grid grid-cols-5 h-[100vh]">
-      <div className="col-span-1 border-2">
-        <div className="m-auto flex justify-center items-center text-3xl font-bold p-4">
-          Ai Assitences
+    <div className="grid grid-cols-5 h-screen">
+      <aside className="col-span-1 border-r p-4">
+        <h2 className="text-2xl font-bold text-center mb-4">AI Assistants</h2>
+        <button className="bg-blue-500 text-white p-2 w-full mb-4">
+          Add Assistant
+        </button>
+        <div className="flex flex-col gap-4">
+          {assistants.map((assistant, index) => (
+            <div
+              key={index}
+              className="flex items-center gap-4 p-2 cursor-pointer hover:bg-gray-100"
+              onClick={() => handleSelectAssistant(assistant)}
+            >
+              <Image
+                src={assistant.src}
+                alt={assistant.aName}
+                width={50}
+                height={50}
+              />
+              <span>{assistant.aName}</span>
+            </div>
+          ))}
         </div>
-        <div className="flex justify-center items-center">
-          <button className="bg-red-400 p-2 m-4 cursor-pointer">
-            Add Assistence
-          </button>
+      </aside>
+      <main className="col-span-3 flex flex-col p-6 border-r">
+        <h1 className="text-3xl font-bold mb-4 text-center">Chat</h1>
+        <div className="flex-1 overflow-y-auto p-4 border rounded">
+          {messages.map((msg, index) => (
+            <div
+              key={index}
+              className={`mt-2 ${msg.id === 1 ? "text-left" : "text-right"}`}
+            >
+              {msg.text}
+            </div>
+          ))}
         </div>
-        <div className="flex flex-col gap-6 mt-5">
-          {assitence?.length > 0 &&
-            assitence.map((item, index) => {
-              return (
-                <div
-                  onClick={handleClickSelect.bind(this, item)}
-                  key={index}
-                  className="flex gap-10 items-center justify-center cursor-pointer"
-                >
-                  <div>
-                    <Image
-                      src={item.src}
-                      alt="No Image"
-                      height={100}
-                      width={100}
-                    />
-                  </div>
-                  <div>{item?.aName}</div>
-                </div>
-              );
-            })}
-        </div>
-      </div>
-      <div className="col-span-3 border-2 flex justify-between h-full flex-col items-center p-10">
-        <h1 className="font-bold text-3xl">Chat Here</h1>
-        <div>Messages are here</div>
-        <div>
-          {" "}
+        <div className="flex items-center gap-2 mt-4">
           <input
-            value={chat}
-            onChange={handleChangeChats}
-            placeholder="Type Here"
-            className="bg-white p-2 rounded-2xl w-[40vw] text-black"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            placeholder="Type here..."
+            className="flex-1 p-2 border rounded"
           />
           <button
             onClick={handleSendMessage}
-            className="bg-white text-black p-2  rounded-2xl px-3 ml-2 cursor-pointer"
+            className="bg-green-500 text-white p-2 rounded"
           >
-            sent
+            {loader ? "Loading..." : "Send"}
           </button>
         </div>
-      </div>
-      <div className="col-span-1 border-2">
-        {" "}
-        {selected && (
-          <div className="mt-10 flex justify-center items-center flex-col gap-10">
-            <div className="">
-              <Image
-                src={selected.src}
-                alt="No Image"
-                width={300}
-                height={300}
-              />
-            </div>
-            <div>
-              <h1 className="font-bold text-3xl font-sans ">
-                {selected?.aName}
-              </h1>
-            </div>
-            <div>
-              <textarea
-                onChange={handleChange}
-                cols={40}
-                rows={8}
-                className="bg-white text-black"
-                value={instructions}
-              />
+      </main>
+      <aside className="col-span-1 p-6">
+        {selectedAssistant && (
+          <div className="flex flex-col items-center gap-4">
+            <Image
+              src={selectedAssistant.src}
+              alt={selectedAssistant.aName}
+              width={150}
+              height={150}
+            />
+            <h2 className="text-xl font-bold">{selectedAssistant.aName}</h2>
+            <textarea
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              className="w-full p-2 border rounded"
+              rows={6}
+            />
+            <div className="flex gap-4">
+              <button className="bg-gray-400 text-white p-2 rounded">
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveInstructions}
+                className="bg-blue-600 text-white p-2 rounded"
+              >
+                Save
+              </button>
             </div>
           </div>
         )}
-        <div className="mt-20 flex justify-around gap-10">
-          <div>
-            <button className="p-2 bg-gray-400 cursor-pointer ">cancel</button>
-          </div>
-          <div>
-            <button
-              className="p-2 bg-gray-600 cursor-pointer "
-              onClick={handleSave}
-            >
-              {" "}
-              Save
-            </button>
-          </div>
-        </div>
-      </div>
+      </aside>
     </div>
   );
 };
