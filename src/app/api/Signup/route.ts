@@ -1,5 +1,7 @@
 import mysqlpool from "@/app/config/dbconfig";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 
 export async function POST(req: Request) {
   try {
@@ -27,6 +29,21 @@ export async function POST(req: Request) {
     );
 
     if (result) {
+      const secretKey = process.env.JWT_SECRET || "default_secret_key";
+
+      const token = jwt.sign(
+        { id: result.insertedId, name: name, email: email },
+        secretKey,
+        { expiresIn: "1h" }
+      );
+
+      // Set secure HTTP-only cookie
+      cookies().set("AiCookie", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        path: "/",
+      });
       return NextResponse.json(
         {
           message: "Data successfully added",

@@ -58,8 +58,10 @@ const ChatSection = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           selected: selectedAssistant,
-          desc: instructions,
+          disc: instructions,
         }),
+        cache: "no-store", // Prevents Next.js from caching the response
+        next: { revalidate: 0 },
       });
       const data = await response.json();
       alert(

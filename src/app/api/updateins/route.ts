@@ -7,12 +7,12 @@ export async function PATCH(req: Request) {
     console.log("Received data:", data);
 
     // Validate required fields
-    if (!data.disc || !data.selected.aiId) {
-      return NextResponse.json(
-        { message: "aiId and description are required", success: false },
-        { status: 400 }
-      );
-    }
+    // if (!data.disc || !data.selected.aiId) {
+    //   return NextResponse.json(
+    //     { message: "aiId and description are required", success: false },
+    //     { status: 400 }
+    //   );
+    // }
 
     // Execute the update query
     const [updateResult]: any = await mysqlpool.query(
